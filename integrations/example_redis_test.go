@@ -39,7 +39,7 @@ func ExampleMonitoredRedisFactory_client() {
 	// variables should be properly initialized in production code
 	var tracer *tracing.Tracer
 	// Create a factory
-	factory := integrations.NewMonitoredRedisFactory(
+	factory := integrations.NewMonitoredRedisClient(
 		"redis",
 		redis.NewClient(&redis.Options{Addr: ":6379"}),
 	)
@@ -58,7 +58,7 @@ func ExampleMonitoredRedisFactory_cluster() {
 	// variables should be properly initialized in production code
 	var tracer *tracing.Tracer
 	// Create a factory
-	factory := integrations.NewMonitoredRedisFactory(
+	factory := integrations.NewMonitoredRedisClusterClient(
 		"redis",
 		redis.NewClusterClient(&redis.ClusterOptions{
 			Addrs: []string{":7000", ":7001", ":7002"},
@@ -79,7 +79,7 @@ func ExampleMonitoredRedisFactory_sentinel() {
 	// variables should be properly initialized in production code
 	var tracer *tracing.Tracer
 	// Create a factory
-	factory := integrations.NewMonitoredRedisFactory(
+	factory := integrations.NewMonitoredRedisClient(
 		"redis",
 		redis.NewFailoverClient(&redis.FailoverOptions{
 			MasterName:    "master",
@@ -101,7 +101,7 @@ func ExampleMonitoredRedisFactory_ring() {
 	// variables should be properly initialized in production code
 	var tracer *tracing.Tracer
 	// Create a factory
-	factory := integrations.NewMonitoredRedisFactory(
+	factory := integrations.NewMonitoredRedisRing(
 		"redis",
 		redis.NewRing(&redis.RingOptions{
 			Addrs: map[string]string{

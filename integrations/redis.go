@@ -85,10 +85,6 @@ type monitoredClient struct {
 	*redis.Client
 }
 
-func (c *monitoredClient) AddHook(hook redis.Hook) {
-	c.Client.AddHook(hook)
-}
-
 func (c *monitoredClient) WithMonitoredContext(ctx context.Context) MonitoredRedis {
 	return &monitoredClient{Client: c.Client.WithContext(ctx)}
 }
@@ -97,20 +93,12 @@ type monitoredClusterClient struct {
 	*redis.ClusterClient
 }
 
-func (c *monitoredClusterClient) AddHook(hook redis.Hook) {
-	c.ClusterClient.AddHook(hook)
-}
-
 func (c *monitoredClusterClient) WithMonitoredContext(ctx context.Context) MonitoredRedis {
 	return &monitoredClusterClient{ClusterClient: c.ClusterClient.WithContext(ctx)}
 }
 
 type monitoredRing struct {
 	*redis.Ring
-}
-
-func (c *monitoredRing) AddHook(hook redis.Hook) {
-	c.Ring.AddHook(hook)
 }
 
 func (c *monitoredRing) WithMonitoredContext(ctx context.Context) MonitoredRedis {
@@ -123,22 +111,30 @@ type MonitoredRedisFactory struct {
 	client MonitoredRedis
 }
 
-// NewMonitoredRedisFactory creates a new MonitoredRedisFactory with the given
-// name and base client.
-func NewMonitoredRedisFactory(name string, client redis.Cmdable) MonitoredRedisFactory {
-	var base MonitoredRedis
-	if c, ok := client.(*redis.Client); ok {
-		base = &monitoredClient{Client: c}
-	} else if c, ok := client.(*redis.ClusterClient); ok {
-		base = &monitoredClusterClient{ClusterClient: c}
-	} else if c, ok := client.(*redis.Ring); ok {
-		base = &monitoredRing{Ring: c}
-	}
-	base.AddHook(RedisSpanHook{ClientName: name})
-	return MonitoredRedisFactory{client: base}
+func newMonitoredRedisFactory(name string, client MonitoredRedis) MonitoredRedisFactory {
+	client.AddHook(RedisSpanHook{ClientName: name})
+	return MonitoredRedisFactory{client: client}
+}
+
+func NewMonitoredRedisClient(name string, client *redis.Client) MonitoredRedisFactory {
+	return newMonitoredRedisFactory(name, &monitoredClient{Client: client})
+}
+
+func NewMonitoredRedisClusterClient(name string, client *redis.ClusterClient) MonitoredRedisFactory {
+	return newMonitoredRedisFactory(name, &monitoredClusterClient{ClusterClient: client})
+}
+
+func NewMonitoredRedisRing(name string, client *redis.Ring) MonitoredRedisFactory {
+	return newMonitoredRedisFactory(name, &monitoredRing{Ring: client})
 }
 
 // BuildClient returns a new, monitored Redis client with the given context.
 func (f MonitoredRedisFactory) BuildClient(ctx context.Context) MonitoredRedis {
 	return f.client.WithMonitoredContext(ctx)
 }
+
+var (
+	_ MonitoredRedis = (*monitoredClient)(nil)
+	_ MonitoredRedis = (*monitoredClusterClient)(nil)
+	_ MonitoredRedis = (*monitoredRing)(nil)
+)
