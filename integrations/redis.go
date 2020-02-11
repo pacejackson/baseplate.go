@@ -74,111 +74,71 @@ func (h RedisSpanHook) endChildSpan(ctx context.Context, err error) error {
 	return nil
 }
 
+type MonitoredRedis interface {
+	redis.Cmdable
+
+	AddHook(hook redis.Hook)
+	WithMonitoredContext(ctx context.Context) MonitoredRedis
+}
+
+type monitoredClient struct {
+	*redis.Client
+}
+
+func (c *monitoredClient) AddHook(hook redis.Hook) {
+	c.Client.AddHook(hook)
+}
+
+func (c *monitoredClient) WithMonitoredContext(ctx context.Context) MonitoredRedis {
+	return &monitoredClient{Client: c.Client.WithContext(ctx)}
+}
+
+type monitoredClusterClient struct {
+	*redis.ClusterClient
+}
+
+func (c *monitoredClusterClient) AddHook(hook redis.Hook) {
+	c.ClusterClient.AddHook(hook)
+}
+
+func (c *monitoredClusterClient) WithMonitoredContext(ctx context.Context) MonitoredRedis {
+	return &monitoredClusterClient{ClusterClient: c.ClusterClient.WithContext(ctx)}
+}
+
+type monitoredRing struct {
+	*redis.Ring
+}
+
+func (c *monitoredRing) AddHook(hook redis.Hook) {
+	c.Ring.AddHook(hook)
+}
+
+func (c *monitoredRing) WithMonitoredContext(ctx context.Context) MonitoredRedis {
+	return &monitoredRing{Ring: c.Ring.WithContext(ctx)}
+}
+
 // MonitoredRedisFactory is used to create Redis clients that are monitored by
 // a RedisSpanHook.
-type MonitoredRedisFactory interface {
-	// BuildClient returns a new, monitored redis.Cmdable with the given context.
-	BuildClient(ctx context.Context) redis.Cmdable
+type MonitoredRedisFactory struct {
+	client MonitoredRedis
 }
 
-// RedisClientFactory is used by a service to create a new, non-failover redis.Client
-// using the current context and monitored by a baseplate.go RedisSpanHook to
-// inject into an endpoint that needs to use Redis.
-//
-// See https://pkg.go.dev/github.com/go-redis/redis/v7?tab=doc#Client for documentation
-// about redis.Client.
-type RedisClientFactory struct {
-	client *redis.Client
+// NewMonitoredRedisFactory creates a new MonitoredRedisFactory with the given
+// name and base client.
+func NewMonitoredRedisFactory(name string, client redis.Cmdable) MonitoredRedisFactory {
+	var base MonitoredRedis
+	if c, ok := client.(*redis.Client); ok {
+		base = &monitoredClient{Client: c}
+	} else if c, ok := client.(*redis.ClusterClient); ok {
+		base = &monitoredClusterClient{ClusterClient: c}
+	} else if c, ok := client.(*redis.Ring); ok {
+		base = &monitoredRing{Ring: c}
+	}
+	base.AddHook(RedisSpanHook{ClientName: name})
+	return MonitoredRedisFactory{client: base}
 }
 
-// NewRedisClientFactory creates a new RedisClusterFactory with the given name and
-// options.
-func NewRedisClientFactory(name string, opt *redis.Options) RedisClientFactory {
-	client := redis.NewClient(opt)
-	client.AddHook(RedisSpanHook{ClientName: name})
-	return RedisClientFactory{client: client}
+// BuildClient returns a new, monitored Redis client with the given context.
+func (f MonitoredRedisFactory) BuildClient(ctx context.Context) MonitoredRedis {
+	return f.client.WithMonitoredContext(ctx)
 }
-
-// BuildClient returns a new, monitored redis.Client with the given context.
-func (f RedisClientFactory) BuildClient(ctx context.Context) redis.Cmdable {
-	return f.client.WithContext(ctx)
-}
-
-// RedisSentinelClientFactory is used by a service to create a new, failover
-// (using Redis Sentinel) redis.Client using the current context and monitored
-// by a baseplate.go RedisSpanHook to inject into an endpoint that needs to
-// use Redis.
-//
-// See https://pkg.go.dev/github.com/go-redis/redis/v7?tab=doc#Client for documentation
-// about redis.Client and https://redis.io/topics/sentinel for information about
-// Redis Sentinel.
-type RedisSentinelClientFactory struct {
-	client *redis.Client
-}
-
-// NewRedisSentinelClientFactory creates a new RedisClusterFactory with the
-// given name and options.
-func NewRedisSentinelClientFactory(name string, opt *redis.FailoverOptions) RedisSentinelClientFactory {
-	client := redis.NewFailoverClient(opt)
-	client.AddHook(RedisSpanHook{ClientName: name})
-	return RedisSentinelClientFactory{client: client}
-}
-
-// BuildClient returns a new, monitored redis.Client with the given context.
-func (f RedisSentinelClientFactory) BuildClient(ctx context.Context) redis.Cmdable {
-	return f.client.WithContext(ctx)
-}
-
-// RedisClusterFactory is used by a service to create a new redis.ClusterClient
-// using the current context and monitored by a baseplate.go RedisSpanHook to
-// inject into an endpoint that needs to use Redis.
-//
-// See https://pkg.go.dev/github.com/go-redis/redis/v7?tab=doc#ClusterClient for
-// documentation about redis.ClusterClient and https://redis.io/topics/cluster-tutorial
-// for information about Redis Cluster.
-type RedisClusterFactory struct {
-	client *redis.ClusterClient
-}
-
-// NewRedisClusterFactory creates a new RedisClusterFactory with the given name and
-// options.
-func NewRedisClusterFactory(name string, opt *redis.ClusterOptions) RedisClusterFactory {
-	client := redis.NewClusterClient(opt)
-	client.AddHook(RedisSpanHook{ClientName: name})
-	return RedisClusterFactory{client: client}
-}
-
-// BuildClient returns a new, monitored redis.ClusterClient with the given context.
-func (f RedisClusterFactory) BuildClient(ctx context.Context) redis.Cmdable {
-	return f.client.WithContext(ctx)
-}
-
-// RedisRingFactory is used by a service to create a new redis.Ring
-// using the current context and monitored by a baseplate.go RedisSpanHook to
-// inject into an endpoint that needs to use Redis.
-//
-// See https://pkg.go.dev/github.com/go-redis/redis/v7?tab=doc#Ring for documentation
-// about redis.Ring
-type RedisRingFactory struct {
-	client *redis.Ring
-}
-
-// NewRedisRingFactory creates a new RedisRingFactory with the given name and
-// cluster options.
-func NewRedisRingFactory(name string, opt *redis.RingOptions) RedisRingFactory {
-	client := redis.NewRing(opt)
-	client.AddHook(RedisSpanHook{ClientName: name})
-	return RedisRingFactory{client: client}
-}
-
-// BuildClient returns a new, monitored redis.RingClient with the given context.
-func (f RedisRingFactory) BuildClient(ctx context.Context) redis.Cmdable {
-	return f.client.WithContext(ctx)
-}
-
-var (
-	_ MonitoredRedisFactory = RedisClientFactory{}
-	_ MonitoredRedisFactory = RedisSentinelClientFactory{}
-	_ MonitoredRedisFactory = RedisClusterFactory{}
-	_ MonitoredRedisFactory = RedisRingFactory{}
-)

@@ -33,33 +33,15 @@ func ExampleRedisSpanHook() {
 	client.Ping()
 }
 
-// This example demonstrates how to use a RedisClientFactory to create monitored
-// Redis clients.
-func ExampleRedisClientFactory() {
+// This example demonstrates how to use a MonitoredRedisFactory to create
+// monitored redis.Client objects.
+func ExampleMonitoredRedisFactory_client() {
 	// variables should be properly initialized in production code
 	var tracer *tracing.Tracer
 	// Create a factory
-	factory := integrations.NewRedisClientFactory("redis", &redis.Options{Addr: ":6379"})
-	// Get a context object and a server Span, with the server Span set on the
-	// context
-	ctx, _ := tracing.CreateServerSpanForContext(context.Background(), tracer, "test")
-	// Create a new client using the context for the Server Span
-	client := factory.BuildClient(ctx)
-	// Commands should now be wrapped using Client Spans
-	client.Ping()
-}
-
-// This example demonstrates how to use a RedisClusterFactory to create monitored
-// Redis Cluster clients.
-func ExampleRedisClusterFactory() {
-	// variables should be properly initialized in production code
-	var tracer *tracing.Tracer
-	// Create a factory
-	factory := integrations.NewRedisClusterFactory(
+	factory := integrations.NewMonitoredRedisFactory(
 		"redis",
-		&redis.ClusterOptions{
-			Addrs: []string{":6379", ":6380", ":6381"},
-		},
+		redis.NewClient(&redis.Options{Addr: ":6379"}),
 	)
 	// Get a context object and a server Span, with the server Span set on the
 	// context
@@ -70,18 +52,39 @@ func ExampleRedisClusterFactory() {
 	client.Ping()
 }
 
-// This example demonstrates how to use a RedisSentinelClientFactory to create monitored
-// Redis clients that implement failover using Redis Sentinel.
-func ExampleRedisSentinelClientFactory() {
+// This example demonstrates how to use a MonitoredRedisFactory to create
+// monitored redis.ClusterClient objects.
+func ExampleMonitoredRedisFactory_cluster() {
 	// variables should be properly initialized in production code
 	var tracer *tracing.Tracer
 	// Create a factory
-	factory := integrations.NewRedisSentinelClientFactory(
+	factory := integrations.NewMonitoredRedisFactory(
 		"redis",
-		&redis.FailoverOptions{
+		redis.NewClusterClient(&redis.ClusterOptions{
+			Addrs: []string{":7000", ":7001", ":7002"},
+		}),
+	)
+	// Get a context object and a server Span, with the server Span set on the
+	// context
+	ctx, _ := tracing.CreateServerSpanForContext(context.Background(), tracer, "test")
+	// Create a new client using the context for the Server Span
+	client := factory.BuildClient(ctx)
+	// Commands should now be wrapped using Client Spans
+	client.Ping()
+}
+
+// This example demonstrates how to use a MonitoredRedisFactory to create
+// monitored redis.Client objects that implement failover using Redis Sentinel.
+func ExampleMonitoredRedisFactory_sentinel() {
+	// variables should be properly initialized in production code
+	var tracer *tracing.Tracer
+	// Create a factory
+	factory := integrations.NewMonitoredRedisFactory(
+		"redis",
+		redis.NewFailoverClient(&redis.FailoverOptions{
 			MasterName:    "master",
 			SentinelAddrs: []string{":6379"},
-		},
+		}),
 	)
 	// Get a context object and a server Span, with the server Span set on the
 	// context
@@ -92,21 +95,21 @@ func ExampleRedisSentinelClientFactory() {
 	client.Ping()
 }
 
-// This example demonstrates how to use a RedisRingFactory to create monitored
-// Redis go-redis ring clients.
-func ExampleRedisRingFactory() {
+// This example demonstrates how to use a MonitoredRedisFactory to create
+// monitored redis.Ring objects.
+func ExampleMonitoredRedisFactory_ring() {
 	// variables should be properly initialized in production code
 	var tracer *tracing.Tracer
 	// Create a factory
-	factory := integrations.NewRedisRingFactory(
+	factory := integrations.NewMonitoredRedisFactory(
 		"redis",
-		&redis.RingOptions{
+		redis.NewRing(&redis.RingOptions{
 			Addrs: map[string]string{
-				"shard0": ":6379",
-				"shard1": ":6380",
-				"shard2": ":6381",
+				"shard0": ":7000",
+				"shard1": ":7001",
+				"shard2": ":7002",
 			},
-		},
+		}),
 	)
 	// Get a context object and a server Span, with the server Span set on the
 	// context
