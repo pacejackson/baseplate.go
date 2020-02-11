@@ -72,7 +72,7 @@ func ExampleRedisClusterFactory() {
 
 // This example demonstrates how to use a RedisSentinelClientFactory to create monitored
 // Redis clients that implement failover using Redis Sentinel.
-func ExampleRedisSentinelClientFactory() {
+func ExampleRedisClientFactory_sentinel() {
 	// variables should be properly initialized in production code
 	var tracer *tracing.Tracer
 	// Create a factory
